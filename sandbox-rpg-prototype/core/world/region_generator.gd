@@ -46,6 +46,7 @@ const WILDERNESS_NAMES: Array[String] = [
 # Generates a full world with a given number of villages and wilderness regions.
 # NPCs are generated and assigned to regions automatically.
 static func generate_world(village_count: int, wilderness_count: int) -> void:
+	_used_wilderness_names.clear()
 	var placed_positions: Array[Vector2] = []
 
 	# Always generate wilderness first — it fills the world

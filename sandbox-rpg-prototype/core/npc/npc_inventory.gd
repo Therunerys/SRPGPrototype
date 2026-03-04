@@ -111,8 +111,7 @@ func get_summary() -> String:
 
 # Splits a resolved_id back into item_id and material_id then resolves it.
 func _resolve_from_id(resolved_id: String) -> ResolvedItem:
-	var parts := resolved_id.split("_mat_")
+	var parts := resolved_id.split("__")
 	var item_id := parts[0]
-	# Re-add the "mat_" prefix that was lost during the split
-	var material_id := "mat_" + parts[1] if parts.size() > 1 else ""
+	var material_id := parts[1] if parts.size() > 1 else ""
 	return ItemResolver.resolve(item_id, material_id)

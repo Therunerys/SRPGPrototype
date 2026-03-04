@@ -55,9 +55,9 @@ func unequip(slot: ItemData.Slot, npc: NPCData) -> bool:
 	_apply_bonuses(resolved, npc, false)
 	_set_slot(slot, "")
 
-	var parts := resolved_id.split("_mat_")
+	var parts := resolved_id.split("__")
 	var item_id := parts[0]
-	var material_id := "mat_" + parts[1] if parts.size() > 1 else ""
+	var material_id := parts[1] if parts.size() > 1 else ""
 	npc.inventory.add_item(item_id, 1, npc.stat_strength, material_id)
 
 	return true
@@ -129,10 +129,9 @@ func _apply_bonuses(resolved: ResolvedItem, npc: NPCData, add: bool) -> void:
 	)
 
 func _resolve_from_id(resolved_id: String) -> ResolvedItem:
-	var parts := resolved_id.split("_mat_")
+	var parts := resolved_id.split("__")
 	var item_id := parts[0]
-	# Re-add the "mat_" prefix that was lost during the split
-	var material_id := "mat_" + parts[1] if parts.size() > 1 else ""
+	var material_id := parts[1] if parts.size() > 1 else ""
 	return ItemResolver.resolve(item_id, material_id)
 
 func _resolved_name(resolved_id: String) -> String:

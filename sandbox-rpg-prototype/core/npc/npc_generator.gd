@@ -105,10 +105,10 @@ static func _random_suffix(length: int) -> String:
 	for i in length:
 		result += CHARS[randi() % CHARS.length()]
 	return result
-	
-	# Gives a newly generated NPC randomized starting skills.
-	# NPCs start with one slightly elevated skill reflecting their background.
-	# All other skills start near zero with tiny random variation.
+
+# Gives a newly generated NPC randomized starting skills.
+# NPCs start with one slightly elevated skill reflecting their background.
+# All other skills start near zero with tiny random variation.
 static func _give_starting_skills(npc: NPCData) -> void:
 	var all_skills := [
 		"combat", "farming", "smithing", "trading",
@@ -122,8 +122,8 @@ static func _give_starting_skills(npc: NPCData) -> void:
 	# Give one random skill a head start — this represents background
 	var primary: String = all_skills[randi() % all_skills.size()]
 	npc.skills.set(primary, randf_range(0.15, 0.35))
-	
-	# Gives a newly generated NPC a small set of starting items.
+
+# Gives a newly generated NPC a small set of starting items.
 static func _give_starting_items(npc: NPCData) -> void:
 	# Food and coins have no material
 	npc.inventory.add_item("item_bread",       randi_range(1, 3), npc.stat_strength)

@@ -49,7 +49,7 @@ static func resolve(item_id: String, material_id: String = "") -> ResolvedItem:
 		return null
 
 	resolved.material_id  = material_id
-	resolved.resolved_id  = "%s_%s" % [item_id, material_id]
+	resolved.resolved_id = "%s__%s" % [item_id, material_id]
 	resolved.display_name = "%s %s" % [material.material_name, item.item_name]
 
 	# Apply material multipliers to base stats

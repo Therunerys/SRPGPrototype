@@ -79,10 +79,6 @@ func setup(
 	carry_bonus    = p_carry_bonus
 	return self
 	
-# ─── INVENTORY ────────────────────────────────────────────────────────────────
-# Each NPC carries their own inventory instance.
-@export var inventory: NPCInventory = NPCInventory.new()
-
 # ─── EQUIPMENT PROPERTIES ─────────────────────────────────────────────────────
 # Only relevant if this item can be equipped. Ignored for food and currency.
 
