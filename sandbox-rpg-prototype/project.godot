@@ -1,0 +1,34 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="SandboxRPGPrototype"
+run/main_scene="uid://ceq4vi3ufuvy3"
+config/features=PackedStringArray("4.6", "GL Compatibility")
+config/icon="res://icon.svg"
+
+[autoload]
+
+NPCManager="*uid://bied3jp3j8b3o"
+RegionManager="*uid://dn30vwywshum3"
+WorldClock="*uid://d10vv3w2ul0nf"
+NPCNeedDecay="*uid://b0qr0eo8fiveq"
+ItemDatabase="*uid://j6k1wx6wgktr"
+
+[physics]
+
+3d/physics_engine="Jolt Physics"
+
+[rendering]
+
+rendering_device/driver.windows="d3d12"
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
