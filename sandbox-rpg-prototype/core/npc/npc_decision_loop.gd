@@ -31,7 +31,8 @@ func _ready() -> void:
 
 func _on_minute_passed() -> void:
 	for npc in NPCManager.get_all_npcs():
-		if npc.location.lod_zone == NPCLocation.LODZone.ACTIVE:
+		if npc.location.lod_zone == NPCLocation.LODZone.ACTIVE or \
+		   npc.location.lod_zone == NPCLocation.LODZone.PRESENT:
 			if not npc.location.is_travelling():
 				_make_decision(npc)
 
@@ -40,15 +41,12 @@ func _on_hour_passed() -> void:
 		if npc.location.lod_zone == NPCLocation.LODZone.INACTIVE:
 			if not npc.location.is_travelling():
 				_make_decision(npc)
-			# Also update job satisfaction hourly
 			npc.profession.update_satisfaction()
 
 # ─── DECISION MAKING ──────────────────────────────────────────────────────────
 
 # Core decision function — evaluates all possible actions and picks the best.
 func _make_decision(npc: NPCData) -> void:
-	if npc.full_name != "Dara Harwick":
-		return
 	# Temporary debug
 	print("  Decision for %s | hunger: %.2f" % [npc.full_name, npc.need_hunger])
 	
