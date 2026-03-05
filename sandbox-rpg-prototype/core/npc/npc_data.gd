@@ -73,3 +73,13 @@ extends Resource
 # What the NPC currently has equipped.
 # Initialized by NPCGenerator when the NPC is created.
 @export var equipment: NPCEquipment
+
+# ─── PROFESSION ───────────────────────────────────────────────────────────────
+# What this NPC does for a living.
+# Initialized by NPCGenerator when the NPC is created.
+@export var profession: NPCProfession
+
+# ─── LOCATION ─────────────────────────────────────────────────────────────────
+# Where this NPC currently is in the simulation world.
+# Initialized by NPCGenerator when the NPC is created.
+@export var location: NPCLocation

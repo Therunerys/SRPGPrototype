@@ -81,7 +81,13 @@ static func _create_npc_data() -> NPCData:
 	# Give each NPC a fresh inventory instance with some starting items
 	npc.inventory  = NPCInventory.new()
 	npc.equipment  = NPCEquipment.new()
+	npc.location   = NPCLocation.new()
 	_give_starting_items(npc)
+	
+	# Give each NPC a profession
+	npc.profession = NPCProfession.new()
+	# Derive profession from skills after skills are assigned
+	npc.profession.derive_from_skills(npc.skills)
 	
 	return npc
 

@@ -109,6 +109,32 @@ static func _populate_region(region: RegionData) -> void:
 	var npcs := NPCGenerator.generate_batch(count)
 	for npc in npcs:
 		RegionManager.assign_npc_to_region(npc.npc_id, region.region_id)
+	POIGenerator.generate_for_region(region)
+	# Place all NPCs at their home region
+	_place_npcs_in_region(region)
+
+static func _place_npcs_in_region(region: RegionData) -> void:
+	# Find a home POI in this region to start NPCs at
+	var homes := POIManager.get_pois_by_type(region.region_id, POIData.Type.HOME)
+	if homes.is_empty():
+		return
+
+	for npc_id in region.resident_ids:
+		var npc := NPCManager.get_npc(npc_id)
+		if npc == null:
+			continue
+		# Assign NPC to a home with available capacity
+		var assigned := false
+		for home in homes:
+			if home.has_capacity():
+				npc.location.current_region_id = region.region_id
+				npc.location.current_poi_id    = home.poi_id
+				POIManager.enter_poi(home.poi_id, npc_id)
+				assigned = true
+				break
+		# If no home has capacity, just place them in the region
+		if not assigned:
+			npc.location.current_region_id = region.region_id
 
 # Divides the world into a grid and picks a random point within a cell.
 # Guarantees even spread across the map rather than random clustering.
