@@ -47,16 +47,20 @@ func _on_hour_passed() -> void:
 
 # Core decision function — evaluates all possible actions and picks the best.
 func _make_decision(npc: NPCData) -> void:
-	# Step 1 — Try to satisfy needs directly from inventory first
-	# This avoids unnecessary travel if the NPC already has what they need
+	if npc.full_name != "Dara Harwick":
+		return
+	# Temporary debug
+	print("  Decision for %s | hunger: %.2f" % [npc.full_name, npc.need_hunger])
+	
 	if npc.need_hunger <= CRITICAL_THRESHOLD:
+		print("  → hunger critical, trying to eat")
 		if NPCNeedActions.consume_food(npc):
+			print("  → ate from inventory")
 			return
 
-	# Step 2 — Score all possible actions
 	var scores := _calculate_scores(npc)
+	print("  → scores: %s" % str(scores))
 
-	# Step 3 — Find highest scoring action
 	var best_action := ""
 	var best_score := 0.0
 	for action in scores:
@@ -64,7 +68,7 @@ func _make_decision(npc: NPCData) -> void:
 			best_score = scores[action]
 			best_action = action
 
-	# Step 4 — Execute the best action
+	print("  → best action: %s (%.2f)" % [best_action, best_score])
 	if best_action != "":
 		_execute_action(npc, best_action)
 
@@ -108,7 +112,8 @@ func _calculate_scores(npc: NPCData) -> Dictionary:
 	if most_urgent_need < CRITICAL_THRESHOLD:
 		var work_score: float = (
 			npc.profession.job_satisfaction * 0.6 +
-			npc.trait_ambition * 0.4
+			npc.trait_ambition * 0.4 +
+			0.3 # Base work drive — NPCs default to working
 		)
 		scores["work"] = clampf(work_score, 0.0, 1.0)
 
@@ -140,14 +145,49 @@ func _execute_action(npc: NPCData, action: String) -> void:
 # ─── ACTIONS ──────────────────────────────────────────────────────────────────
 
 func _action_eat(npc: NPCData) -> void:
-	# First try eating from inventory
+	# Already at a food POI — try to take food from it
+	if _is_at_poi_type(npc, POIData.Type.TAVERN) or \
+	   _is_at_poi_type(npc, POIData.Type.GRANARY):
+		var poi := POIManager.get_poi(npc.location.current_poi_id)
+		if poi and _take_food_from_poi(npc, poi):
+			return
+
+	# Try eating from inventory first
 	if NPCNeedActions.consume_food(npc):
 		return
 
-	# No food in inventory — travel to nearest food source
+	# Nothing in inventory — travel to nearest food source
 	var poi := _find_nearest_poi_for_need(npc, "need_hunger")
 	if poi:
 		NPCTravelSystem.begin_travel(npc, poi.poi_id)
+
+# Takes one food item from a POI into NPC inventory and consumes it.
+func _take_food_from_poi(npc: NPCData, poi: POIData) -> bool:
+	# Find best food in POI storage
+	var best_id := ""
+	var best_restore := 0.0
+
+	for item_id in poi.stored_items:
+		if poi.stored_items[item_id] <= 0:
+			continue
+		var item := ItemDatabase.get_item(item_id)
+		if item and item.category == ItemData.Category.FOOD:
+			if item.hunger_restore > best_restore:
+				best_restore = item.hunger_restore
+				best_id = item_id
+
+	if best_id == "":
+		return false
+
+	# Transfer one unit from POI to NPC inventory
+	poi.stored_items[best_id] -= 1
+	if poi.stored_items[best_id] <= 0:
+		poi.stored_items.erase(best_id)
+
+	# Add to inventory and consume immediately
+	npc.inventory.add_item(best_id, 1, npc.stat_strength)
+	NPCNeedActions.consume_food(npc)
+	return true
 
 func _action_sleep(npc: NPCData) -> void:
 	# Check if already at a home

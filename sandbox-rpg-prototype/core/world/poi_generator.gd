@@ -23,19 +23,25 @@ static func generate_for_region(region: RegionData) -> void:
 # ─── INTERNAL ─────────────────────────────────────────────────────────────────
 
 static func _generate_village_pois(region: RegionData) -> void:
-	# Every village gets these POIs
 	_create_poi(region, POIData.Type.FARM,       "Farm",       4)
-	_create_poi(region, POIData.Type.GRANARY,    "Granary",    10)
-	_create_poi(region, POIData.Type.TAVERN,     "Tavern",     8)
+	
+	# Granary starts with food stock
+	var granary := _create_poi(region, POIData.Type.GRANARY, "Granary", 10)
+	granary.stored_items["item_bread"] = 50
+	granary.stored_items["item_dried_meat"] = 20
+
+	# Tavern starts with food and ale
+	var tavern := _create_poi(region, POIData.Type.TAVERN, "Tavern", 8)
+	tavern.stored_items["item_bread"] = 20
+	tavern.stored_items["item_ale"] = 30
+
 	_create_poi(region, POIData.Type.MARKET,     "Market",     6)
 	_create_poi(region, POIData.Type.BLACKSMITH, "Blacksmith", 2)
 
-	# Generate one home per NPC in the region
-	# Homes are private — capacity 1 per NPC family unit
 	var resident_count := region.resident_ids.size()
-	var home_count: int = max(1, int(resident_count / 3.0))
+	var home_count: int = max(3, int(resident_count / 2.0))
 	for i in home_count:
-		_create_poi(region, POIData.Type.HOME, "Home %d" % (i + 1), 3)
+		_create_poi(region, POIData.Type.HOME, "Home %d" % (i + 1), 5)
 
 static func _generate_wilderness_pois(region: RegionData) -> void:
 	# Wilderness only has a camp for basic rest and safety
