@@ -23,6 +23,7 @@ RegionManager="*uid://dn30vwywshum3"
 WorldClock="*uid://d10vv3w2ul0nf"
 NPCNeedDecay="*uid://b0qr0eo8fiveq"
 POIManager="*uid://tcn201y4888n"
+ObjectManager="*uid://d4lkh546x8sfl"
 NPCTravelSystem="*uid://b0l42qkf83fra"
 NPCDecisionLoop="*uid://c5iiudv277be0"
 

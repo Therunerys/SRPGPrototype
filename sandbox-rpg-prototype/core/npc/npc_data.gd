@@ -86,3 +86,8 @@ extends Resource
 # Assigned at generation by RegionGenerator. Never changes unless
 # the NPC moves regions (migration system, future feature).
 @export var home_poi_id: String = ""
+
+# ─── PERMISSIONS ──────────────────────────────────────────────────────────────
+# Object IDs this NPC has been granted access to by their owners.
+# Example: housemate grants access to their fireplace and table.
+@export var permitted_object_ids: Array[String] = []

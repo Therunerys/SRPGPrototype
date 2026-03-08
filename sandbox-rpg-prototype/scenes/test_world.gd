@@ -10,16 +10,24 @@ func _ready() -> void:
 	var villages := RegionManager.get_regions_by_type(RegionData.Type.VILLAGE)
 	if not villages.is_empty():
 		var village: RegionData = villages[0]
-		
-		# Move player to this village so NPCs become ACTIVE and PRESENT
 		NPCTravelSystem.set_player_position(village.world_position)
-		
+
 		if not village.resident_ids.is_empty():
 			_tracked_npc = NPCManager.get_npc(village.resident_ids[0])
 			print("Tracking: %s (%s)" % [
 				_tracked_npc.full_name,
 				_tracked_npc.profession.get_primary_name()
 			])
+			# Print objects in NPC's home
+			var home_objects := ObjectManager.get_objects_in_poi(_tracked_npc.home_poi_id)
+			print("Objects in %s's home:" % _tracked_npc.full_name)
+			for obj in home_objects:
+				print("  %s | Quality: %s | Access: %s | Owner: %s" % [
+					obj.get_type_name(),
+					obj.get_quality_name(),
+					ObjectData.Access.keys()[obj.access_level],
+					obj.owner_id
+				])
 
 func _on_hour_passed() -> void:
 	if _tracked_npc == null:

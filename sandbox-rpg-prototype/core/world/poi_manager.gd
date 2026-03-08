@@ -56,12 +56,6 @@ func get_pois_by_type(region_id: String, type: POIData.Type) -> Array:
 		func(poi): return poi.region_id == region_id and poi.poi_type == type
 	)
 
-# Returns all POIs in a region that satisfy a specific need.
-func get_pois_for_need(region_id: String, need_name: String) -> Array:
-	return _pois.values().filter(
-		func(poi): return poi.region_id == region_id and poi.satisfies_need(need_name)
-	)
-
 # Returns the nearest available POI of a given type to a world position.
 # Searches across all regions — useful when the NPC might need to travel.
 func get_nearest_poi(poi_type: POIData.Type, from_position: Vector2) -> POIData:

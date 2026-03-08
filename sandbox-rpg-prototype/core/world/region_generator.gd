@@ -110,8 +110,15 @@ static func _populate_region(region: RegionData) -> void:
 	for npc in npcs:
 		RegionManager.assign_npc_to_region(npc.npc_id, region.region_id)
 	POIGenerator.generate_for_region(region)
-	# Place all NPCs at their home region
 	_place_npcs_in_region(region)
+	# Generate objects AFTER NPCs are placed so ownership is known
+	_generate_objects_for_region(region)
+
+static func _generate_objects_for_region(region: RegionData) -> void:
+	var pois := POIManager.get_pois_in_region(region.region_id)
+	for poi in pois:
+		var npc_ids: Array = poi.current_users.duplicate()
+		ObjectGenerator.generate_for_poi(poi, npc_ids)
 
 static func _place_npcs_in_region(region: RegionData) -> void:
 	var homes := POIManager.get_pois_by_type(region.region_id, POIData.Type.HOME)

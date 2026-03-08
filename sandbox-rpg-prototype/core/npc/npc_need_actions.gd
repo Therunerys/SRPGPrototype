@@ -29,13 +29,10 @@ static func consume_food(npc: NPCData) -> bool:
 
 # ─── REST ─────────────────────────────────────────────────────────────────────
 
-# Restores rest need by a given amount.
-# Called when an NPC sleeps. Amount depends on sleep quality later.
-static func sleep(npc: NPCData, quality: float = 0.5) -> void:
-	# Base rest restore per sleep session
-	# quality range: 0.0 (floor) to 1.0 (own bed)
-	var restore := 0.3 + (quality * 0.4)
-	npc.need_rest = clampf(npc.need_rest + restore, 0.0, 1.0)
+# Sleep now takes restore amount from the bed object quality
+# quality parameter removed — caller passes the amount directly
+static func sleep(npc: NPCData, restore_amount: float) -> void:
+	npc.need_rest = clampf(npc.need_rest + restore_amount, 0.0, 1.0)
 
 # ─── SAFETY ───────────────────────────────────────────────────────────────────
 
