@@ -113,21 +113,23 @@ func _advance_travel(npc: NPCData, minutes: float) -> void:
 
 # Called when an NPC completes their journey.
 func _arrive(npc: NPCData) -> void:
-	var dest_poi_id := npc.location.destination_poi_id
+	var dest_poi_id    := npc.location.destination_poi_id
+	var dest_region_id := npc.location.destination_region_id
 
-	npc.location.current_region_id     = npc.location.destination_region_id
-	npc.location.destination_poi_id    = ""
-	npc.location.destination_region_id = ""
-	npc.location.travel_progress       = 0.0
+	# Clear travel state
+	npc.location.destination_poi_id      = ""
+	npc.location.destination_region_id   = ""
+	npc.location.travel_progress         = 0.0
 	npc.location.travel_duration_minutes = 0.0
 
-	# Check capacity again on arrival — it may have filled up during travel
-	if POIManager.enter_poi(dest_poi_id, npc.npc_id):
-		npc.location.current_poi_id = dest_poi_id
-	else:
-		# POI is full — NPC arrives in the region but not at the POI
-		# Decision loop will find an alternative next tick
-		npc.location.current_poi_id = ""
+	# Update region
+	npc.location.current_region_id = dest_region_id
+
+	# Always set current_poi_id to the destination — never leave it empty.
+	# This prevents the debug view from flashing "Unknown" between ticks.
+	# If the POI is full, the decision loop will reroute on the next tick.
+	POIManager.enter_poi(dest_poi_id, npc.npc_id)
+	npc.location.current_poi_id = dest_poi_id
 
 # ─── TRAVEL SPEED ─────────────────────────────────────────────────────────────
 

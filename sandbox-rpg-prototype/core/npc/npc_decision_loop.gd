@@ -297,7 +297,12 @@ func _action_work(npc: NPCData) -> void:
 		_action_work_at_poi(npc)
 		return
 
-	# Declare once to avoid redeclaration warning
+	# TOOL_RACK is the farmer's work object — hand off to the full tool flow
+	if work_object_type == ObjectData.Type.TOOL_RACK:
+		_action_work_farmer(npc)
+		return
+
+	# Declare once to avoid redeclaration warning in _action_work
 	var work_obj: ObjectData = ObjectManager.find_usable_object(
 		work_object_type as ObjectData.Type,
 		npc.location.current_region_id,
@@ -344,6 +349,67 @@ func _action_work_at_poi(npc: NPCData) -> void:
 			NPCTravelSystem.begin_travel(npc, poi.poi_id)
 			return
 
+# Full farmer work loop: travel to farm → borrow tool → work → return tool.
+# Tools are taken from a TOOL_RACK at the farm and returned when done.
+# If the NPC already holds a tool, skip straight to working.
+func _action_work_farmer(npc: NPCData) -> void:
+	var farm_poi_id := _find_work_poi_id(npc, POIData.Type.FARM)
+	if farm_poi_id == "":
+		return  # No farm in this region — nothing to do
+
+	# If not at the farm yet, travel there first
+	if npc.location.current_poi_id != farm_poi_id:
+		NPCTravelSystem.begin_travel(npc, farm_poi_id)
+		return
+
+	# At the farm. Find the tool rack.
+	var rack: ObjectData = ObjectManager.find_usable_object(
+		ObjectData.Type.TOOL_RACK,
+		npc.location.current_region_id,
+		npc.npc_id,
+		npc.permitted_object_ids
+	)
+	if rack == null:
+		# No rack found — fall back to plain work-at-poi
+		npc.profession.do_work(npc)
+		npc.profession.is_employed = true
+		return
+
+	# Check if the NPC already has a hoe (picked up on a previous tick)
+	var has_hoe: bool = npc.inventory.has_item("item_hoe__mat_iron") or \
+						npc.inventory.has_item("item_hoe__mat_wood")
+
+	if not has_hoe:
+		# Try to borrow a hoe from the rack
+		var took_iron := ObjectManager.take_from_container(
+			rack.object_id, "item_hoe", "mat_iron", 1, npc
+		)
+		if not took_iron:
+			# Try the wood tier if iron is unavailable
+			ObjectManager.take_from_container(
+				rack.object_id, "item_hoe", "mat_wood", 1, npc
+			)
+		# Equip whichever hoe we now have
+		_equip_first_tool(npc)
+
+	# Do the actual farming work
+	ObjectManager.begin_use(rack.object_id, npc.npc_id)
+	npc.profession.do_work(npc)
+	npc.profession.is_employed = true
+	ObjectManager.end_use(rack.object_id, npc.npc_id)
+
+	# Return the hoe after one work tick so others can use it
+	var returned_iron := ObjectManager.return_to_container(
+		rack.object_id, "item_hoe", "mat_iron", 1, npc
+	)
+	if not returned_iron:
+		ObjectManager.return_to_container(
+			rack.object_id, "item_hoe", "mat_wood", 1, npc
+		)
+
+	# Unequip if the weapon slot still holds a hoe
+	_unequip_tool(npc)
+
 # ─── HELPERS ──────────────────────────────────────────────────────────────────
 
 # Tries to take and consume food from a POI's stored_items.
@@ -386,7 +452,7 @@ func _get_work_poi_type(npc: NPCData) -> int:
 
 func _get_work_object_type(npc: NPCData) -> int:
 	match npc.profession.current_job:
-		NPCProfession.Type.FARMER:     return -1  # Farm objects coming later
+		NPCProfession.Type.FARMER:     return ObjectData.Type.TOOL_RACK
 		NPCProfession.Type.BLACKSMITH: return ObjectData.Type.FORGE
 		NPCProfession.Type.MERCHANT:   return ObjectData.Type.MARKET_STALL
 		NPCProfession.Type.COOK:       return ObjectData.Type.COOKING_POT
@@ -395,3 +461,29 @@ func _get_work_object_type(npc: NPCData) -> int:
 		NPCProfession.Type.HUNTER:     return -1
 		NPCProfession.Type.LABOURER:   return -1
 		_:                             return -1
+
+# Returns the poi_id of the first available POI of the given type in the NPC's region.
+func _find_work_poi_id(npc: NPCData, poi_type: POIData.Type) -> String:
+	var pois := POIManager.get_pois_by_type(npc.location.current_region_id, poi_type)
+	for poi in pois:
+		if poi.has_capacity():
+			return poi.poi_id
+	return ""
+
+# Equips the first tool found in the NPC's inventory into the WEAPON slot.
+func _equip_first_tool(npc: NPCData) -> void:
+	for resolved_id in npc.inventory.get_all_item_ids():
+		var item := ItemResolver.resolve(resolved_id)
+		if item and item.category == ItemData.Category.TOOL:
+			npc.equipment.equip(resolved_id, npc)
+			return
+
+# Unequips any tool currently held in the WEAPON slot.
+func _unequip_tool(npc: NPCData) -> void:
+	var slot := ItemData.Slot.WEAPON
+	var equipped_id: String = npc.equipment.get_equipped(slot)
+	if equipped_id == "":
+		return
+	var item := ItemResolver.resolve(equipped_id)
+	if item and item.category == ItemData.Category.TOOL:
+		npc.equipment.unequip(slot, npc)

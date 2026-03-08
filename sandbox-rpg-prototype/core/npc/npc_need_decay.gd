@@ -9,9 +9,9 @@ extends Node
 # Base decay amounts per game hour for each need.
 # These are the baseline values before trait influence is applied.
 
-const BASE_DECAY_HUNGER: float  = 0.04   # Empties fully in ~25 hours
-const BASE_DECAY_REST: float    = 0.03   # Empties fully in ~33 hours
-const BASE_DECAY_SAFETY: float  = 0.02   # Empties fully in ~50 hours baseline
+const BASE_DECAY_HUNGER: float  = 0.07   # Empties fully in ~14 hours
+const BASE_DECAY_REST: float    = 0.06   # Empties fully in ~16 hours  
+const BASE_DECAY_SAFETY: float  = 0.03   # Empties fully in ~33 hours
 const BASE_DECAY_SOCIAL: float  = 0.01   # Empties fully in ~100 hours
 
 # How much a trait can influence decay rate.
