@@ -69,15 +69,22 @@ func get_objects_in_poi(poi_id: String) -> Array:
 # ─── QUERIES ──────────────────────────────────────────────────────────────────
 
 # Finds the first available object of a given type in a region that the NPC
-# is permitted to use. Returns null if none found.
+# is permitted to use.
+# permitted_object_ids: extra object IDs the NPC has been granted access to
+# (e.g. household objects owned by a housemate).
 func find_usable_object(
 	type: ObjectData.Type,
 	region_id: String,
-	npc_id: String
+	npc_id: String,
+	permitted_object_ids: Array = []
 ) -> ObjectData:
 	var candidates := get_objects_by_type(region_id, type)
 	for obj in candidates:
+		# Standard access check (owner, household, public, work)
 		if obj.is_available_for(npc_id):
+			return obj
+		# Explicit permission granted by another NPC (e.g. housemate's fireplace)
+		if obj.object_id in permitted_object_ids and obj.has_capacity():
 			return obj
 	return null
 
@@ -124,6 +131,35 @@ func end_use(object_id: String, npc_id: String) -> void:
 	if obj == null:
 		return
 	obj.current_users.erase(npc_id)
+
+# ─── CONTAINERS ───────────────────────────────────────────────────────────────
+
+# Takes an item from a container object and puts it in the NPC's inventory.
+# Returns true if the transfer succeeded.
+func take_from_container(object_id: String, item_id: String, material_id: String, quantity: int, npc: NPCData) -> bool:
+	var obj := get_object(object_id)
+	if obj == null or not obj.is_container or obj.inventory == null:
+		return false
+	var resolved_id := item_id if material_id == "" else "%s__%s" % [item_id, material_id]
+	if not obj.inventory.has_item(resolved_id):
+		return false
+	if not obj.inventory.remove_item(resolved_id, quantity):
+		return false
+	return npc.inventory.add_item(item_id, quantity, npc.stat_strength, material_id)
+
+# Returns an item from an NPC's inventory back into a container.
+# Returns true if the transfer succeeded.
+func return_to_container(object_id: String, item_id: String, material_id: String, quantity: int, npc: NPCData) -> bool:
+	var obj := get_object(object_id)
+	if obj == null or not obj.is_container or obj.inventory == null:
+		return false
+	var resolved_id := item_id if material_id == "" else "%s__%s" % [item_id, material_id]
+	if not npc.inventory.has_item(resolved_id):
+		return false
+	if not npc.inventory.remove_item(resolved_id, quantity):
+		return false
+	# Containers have no strength limit — use 99.0 to bypass weight check
+	return obj.inventory.add_item(item_id, quantity, 99.0, material_id)
 
 # ─── INTERNAL ─────────────────────────────────────────────────────────────────
 

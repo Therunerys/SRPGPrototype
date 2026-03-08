@@ -121,16 +121,19 @@ func _calculate_scores(npc: NPCData) -> Dictionary:
 		scores["socialize"] = urgency * trait_mod
 
 	# ── Work ──────────────────────────────────────────────────────────────────
-	# Only work during work hours and if no need is critical
+	# Only work during work hours and if no need is critical.
+	# Base score is high enough to compete with satisfied needs —
+	# an NPC with full needs should default to working during the day.
 	var most_urgent_need: float = _get_most_urgent_need(npc)
 	if not is_night and most_urgent_need < CRITICAL_THRESHOLD:
-		var work_score: float = (
-			npc.profession.job_satisfaction * 0.5 +
-			npc.trait_ambition * 0.3
-		)
-		# Only add base work drive if needs are well satisfied
-		if most_urgent_need < 0.2:
-			work_score += 0.3
+		# Base drive: NPCs want to work by default during the day
+		var work_score: float = 0.55
+		# Ambition pushes score higher, laziness pulls it down
+		work_score += npc.trait_ambition * TRAIT_INFLUENCE
+		# Job satisfaction modifier — miserable workers are less motivated
+		work_score *= npc.profession.job_satisfaction * 0.4 + 0.6
+		# Penalise if needs are dropping — address needs first
+		work_score *= 1.0 - (most_urgent_need * 0.5)
 		scores["work"] = clampf(work_score, 0.0, 1.0)
 
 	return scores
@@ -168,83 +171,72 @@ func _execute_action(npc: NPCData, action: String) -> void:
 # ─── ACTIONS ──────────────────────────────────────────────────────────────────
 
 func _action_eat(npc: NPCData) -> void:
-	# At a POI — try to find a table to eat at
-	if npc.location.current_poi_id != "":
-		var table := ObjectManager.find_usable_object(
-			ObjectData.Type.TABLE,
-			npc.location.current_region_id,
-			npc.npc_id,
-			npc.permitted_object_ids
-		)
-		if table and table.poi_id == npc.location.current_poi_id:
-			# Find food — try POI storage first, then inventory
-			var current_poi := POIManager.get_poi(npc.location.current_poi_id)
-			var ate := false
-			if current_poi:
-				ate = _take_food_from_poi(npc, current_poi)
-			if not ate:
-				ate = NPCNeedActions.consume_food(npc)
-			if ate:
-				# Apply table quality bonus
-				npc.need_hunger = clampf(
-					npc.need_hunger + table.get_restore_amount(),
-					0.0, 1.0
-				)
-				npc.mood = clampf(npc.mood + table.get_mood_modifier(), -1.0, 1.0)
-				return
-
-	# No table here — try inventory directly if critically hungry
-	if npc.need_hunger <= CRITICAL_THRESHOLD:
-		if NPCNeedActions.consume_food(npc):
-			return
-
-	# Find a table to travel to
-	var table := ObjectManager.find_usable_object(
+	# Declare once at the top to avoid redeclaration warning
+	var table: ObjectData = ObjectManager.find_usable_object(
 		ObjectData.Type.TABLE,
 		npc.location.current_region_id,
 		npc.npc_id,
 		npc.permitted_object_ids
 	)
+
+	# Already at a POI with a usable table — eat here
+	if table and table.poi_id == npc.location.current_poi_id:
+		var current_poi := POIManager.get_poi(npc.location.current_poi_id)
+		var ate := false
+		if current_poi:
+			ate = _take_food_from_poi(npc, current_poi)
+		if not ate:
+			ate = NPCNeedActions.consume_food(npc)
+		if ate:
+			# Apply table quality bonus on top of food's own restore
+			npc.need_hunger = clampf(
+				npc.need_hunger + table.get_restore_amount(),
+				0.0, 1.0
+			)
+			npc.mood = clampf(npc.mood + table.get_mood_modifier(), -1.0, 1.0)
+			return
+
+	# No table here — eat from inventory directly if critically hungry
+	if npc.need_hunger <= CRITICAL_THRESHOLD:
+		if NPCNeedActions.consume_food(npc):
+			return
+
+	# Travel to the table found above
 	if table:
 		NPCTravelSystem.begin_travel(npc, table.poi_id)
 	else:
-		# No table available — search globally
+		# No table in region — search globally
 		var region := RegionManager.get_region(npc.location.current_region_id)
 		if region:
-			var global_table := ObjectManager.find_usable_object_global(
+			var global_table: ObjectData = ObjectManager.find_usable_object_global(
 				ObjectData.Type.TABLE, npc.npc_id, region.world_position
 			)
 			if global_table:
 				NPCTravelSystem.begin_travel(npc, global_table.poi_id)
 
 func _action_sleep(npc: NPCData) -> void:
-	# Check if already at a POI with a usable bed
-	if npc.location.current_poi_id != "":
-		var bed := ObjectManager.find_usable_object(
-			ObjectData.Type.BED,
-			npc.location.current_region_id,
-			npc.npc_id,
-			npc.permitted_object_ids
-		)
-		if bed and bed.poi_id == npc.location.current_poi_id:
-			ObjectManager.begin_use(bed.object_id, npc.npc_id)
-			NPCNeedActions.sleep(npc, bed.get_restore_amount())
-			npc.mood = clampf(npc.mood + bed.get_mood_modifier(), -1.0, 1.0)
-			ObjectManager.end_use(bed.object_id, npc.npc_id)
-			return
-
-	# Find nearest usable bed
-	var bed := ObjectManager.find_usable_object(
+	# Declare once to avoid redeclaration warning
+	var bed: ObjectData = ObjectManager.find_usable_object(
 		ObjectData.Type.BED,
 		npc.location.current_region_id,
 		npc.npc_id,
 		npc.permitted_object_ids
 	)
+
+	# Already at the POI with this bed — sleep now
+	if bed and bed.poi_id == npc.location.current_poi_id:
+		ObjectManager.begin_use(bed.object_id, npc.npc_id)
+		NPCNeedActions.sleep(npc, bed.get_restore_amount())
+		npc.mood = clampf(npc.mood + bed.get_mood_modifier(), -1.0, 1.0)
+		ObjectManager.end_use(bed.object_id, npc.npc_id)
+		return
+
+	# Travel to the bed found above
 	if bed:
 		NPCTravelSystem.begin_travel(npc, bed.poi_id)
 	else:
-		# Try straw mat as fallback
-		var mat := ObjectManager.find_usable_object(
+		# No bed available — try straw mat as fallback
+		var mat: ObjectData = ObjectManager.find_usable_object(
 			ObjectData.Type.STRAW_MAT,
 			npc.location.current_region_id,
 			npc.npc_id,
@@ -297,56 +289,77 @@ func _action_socialize(npc: NPCData) -> void:
 			return
 
 func _action_work(npc: NPCData) -> void:
-	# Find the correct work object for this NPC's profession
 	var work_object_type := _get_work_object_type(npc)
+
 	if work_object_type == -1:
+		# Professions with no work object (Farmer, Hunter, Healer, Labourer).
+		# Send them to their profession's POI type to simulate working there.
+		_action_work_at_poi(npc)
 		return
 
-	# Check if already at a POI with correct work object
-	if npc.location.current_poi_id != "":
-		var work_obj := ObjectManager.find_usable_object(
-			work_object_type as ObjectData.Type,
-			npc.location.current_region_id,
-			npc.npc_id,
-			npc.permitted_object_ids
-		)
-		if work_obj and work_obj.poi_id == npc.location.current_poi_id:
-			ObjectManager.begin_use(work_obj.object_id, npc.npc_id)
-			npc.profession.do_work(npc)
-			npc.profession.is_employed = true
-			ObjectManager.end_use(work_obj.object_id, npc.npc_id)
-			return
-
-	# Find work object and travel to its POI
-	var work_obj := ObjectManager.find_usable_object(
+	# Declare once to avoid redeclaration warning
+	var work_obj: ObjectData = ObjectManager.find_usable_object(
 		work_object_type as ObjectData.Type,
 		npc.location.current_region_id,
 		npc.npc_id,
 		npc.permitted_object_ids
 	)
+
+	# Already at the POI with this work object — work now
+	if work_obj and work_obj.poi_id == npc.location.current_poi_id:
+		ObjectManager.begin_use(work_obj.object_id, npc.npc_id)
+		npc.profession.do_work(npc)
+		npc.profession.is_employed = true
+		ObjectManager.end_use(work_obj.object_id, npc.npc_id)
+		return
+
+	# Travel to the work object found above
 	if work_obj:
 		NPCTravelSystem.begin_travel(npc, work_obj.poi_id)
+	else:
+		# Work object exists in profession but none available locally
+		_action_work_at_poi(npc)
+
+# Fallback for professions without a work object.
+# Sends the NPC to the correct POI type for their job and marks them employed.
+# Farmers go to farms, hunters go to wilderness, etc.
+func _action_work_at_poi(npc: NPCData) -> void:
+	var target_poi_type := _get_work_poi_type(npc)
+	if target_poi_type == -1:
+		return
+
+	# Already at the right POI type — do work in place
+	if _is_at_poi_type(npc, target_poi_type as POIData.Type):
+		npc.profession.do_work(npc)
+		npc.profession.is_employed = true
+		return
+
+	# Find the nearest POI of this type and travel there
+	var pois := POIManager.get_pois_by_type(
+		npc.location.current_region_id,
+		target_poi_type as POIData.Type
+	)
+	for poi in pois:
+		if poi.has_capacity():
+			NPCTravelSystem.begin_travel(npc, poi.poi_id)
+			return
 
 # ─── HELPERS ──────────────────────────────────────────────────────────────────
 
-func _find_nearest_poi_for_need(npc: NPCData, need_name: String) -> POIData:
-	# Search current region first
-	var local_pois := POIManager.get_pois_for_need(
-		npc.location.current_region_id, need_name
-	)
-	for poi in local_pois:
-		if poi.has_capacity():
-			return poi
-
-	# Search wider world if nothing local
-	var region := RegionManager.get_region(npc.location.current_region_id)
-	if region == null:
-		return null
-
-	return POIManager.get_nearest_poi(
-		_need_to_poi_type(need_name),
-		region.world_position
-	)
+# Tries to take and consume food from a POI's stored_items.
+# Returns true if food was found and consumed.
+func _take_food_from_poi(npc: NPCData, poi: POIData) -> bool:
+	for item_id in poi.stored_items:
+		if poi.stored_items[item_id] <= 0:
+			continue
+		var resolved := ItemResolver.resolve(item_id)
+		if resolved == null or resolved.hunger_restore <= 0.0:
+			continue
+		# Take one unit from POI storage and eat it
+		poi.stored_items[item_id] -= 1
+		npc.need_hunger = clampf(npc.need_hunger + resolved.hunger_restore, 0.0, 1.0)
+		return true
+	return false
 
 func _is_at_poi_type(npc: NPCData, poi_type: POIData.Type) -> bool:
 	var poi := POIManager.get_poi(npc.location.current_poi_id)
@@ -361,13 +374,15 @@ func _find_social_partner(npc: NPCData) -> NPCData:
 			return NPCManager.get_npc(other_id)
 	return null
 
-func _need_to_poi_type(need_name: String) -> POIData.Type:
-	match need_name:
-		"need_hunger":  return POIData.Type.TAVERN
-		"need_rest":    return POIData.Type.HOME
-		"need_safety":  return POIData.Type.HOME
-		"need_social":  return POIData.Type.TAVERN
-		_:              return POIData.Type.HOME
+# Returns the POI type an NPC should work at when they have no work object.
+# Used as a fallback for Farmers, Hunters, Healers and Labourers.
+func _get_work_poi_type(npc: NPCData) -> int:
+	match npc.profession.current_job:
+		NPCProfession.Type.FARMER:   return POIData.Type.FARM
+		NPCProfession.Type.HUNTER:   return POIData.Type.FARM   # Wilderness later
+		NPCProfession.Type.HEALER:   return POIData.Type.HOME   # Treats at home for now
+		NPCProfession.Type.LABOURER: return POIData.Type.FARM   # Construction site later
+		_:                           return -1
 
 func _get_work_object_type(npc: NPCData) -> int:
 	match npc.profession.current_job:

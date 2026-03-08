@@ -18,7 +18,7 @@ static func generate_for_poi(poi: POIData, npc_ids: Array = []) -> void:
 		POIData.Type.BLACKSMITH:
 			_generate_blacksmith_objects(poi, npc_ids)
 		POIData.Type.FARM:
-			pass # No interactable objects yet
+			_generate_farm_objects(poi)
 		POIData.Type.MARKET:
 			_generate_market_objects(poi, npc_ids)
 		POIData.Type.GRANARY:
@@ -97,7 +97,7 @@ static func _generate_tavern_objects(poi: POIData) -> void:
 # ─── BLACKSMITH ───────────────────────────────────────────────────────────────
 
 static func _generate_blacksmith_objects(poi: POIData, npc_ids: Array) -> void:
-	var owner_id := npc_ids[0] if not npc_ids.is_empty() else ""
+	var owner_id: String = npc_ids[0] if not npc_ids.is_empty() else ""
 
 	var forge := _create_object(poi, ObjectData.Type.FORGE, ObjectData.Quality.STANDARD)
 	forge.owner_id = owner_id
@@ -108,6 +108,23 @@ static func _generate_blacksmith_objects(poi: POIData, npc_ids: Array) -> void:
 	anvil.owner_id = owner_id
 	anvil.access_level = ObjectData.Access.WORK
 	anvil.capacity = 1
+
+# ─── FARM ─────────────────────────────────────────────────────────────────────
+
+static func _generate_farm_objects(poi: POIData) -> void:
+	# One tool rack shared by all farmers at this farm.
+	# Access is WORK so only assigned workers can take from it.
+	var rack := _create_object(poi, ObjectData.Type.TOOL_RACK, ObjectData.Quality.STANDARD)
+	rack.access_level = ObjectData.Access.WORK
+	rack.capacity = 99  # Many tools can be stored, not limited by simultaneous users
+
+	# Initialise the rack's inventory and stock it with starting tools.
+	# Strength 99.0 bypasses the weight check — containers have no strength stat.
+	rack.is_container = true
+	rack.inventory = NPCInventory.new()
+	rack.inventory.add_item("item_hoe",      2, 99.0, "mat_iron")
+	rack.inventory.add_item("item_scythe",   2, 99.0, "mat_iron")
+	rack.inventory.add_item("item_seed_bag", 3, 99.0)
 
 # ─── MARKET ───────────────────────────────────────────────────────────────────
 

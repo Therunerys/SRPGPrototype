@@ -28,13 +28,13 @@ func _register_all_materials() -> void:
 	_register_material(MaterialData.new().setup(
 		"mat_wood", "Wooden",
 		1.0, 0.8, 0.9, 0.7,
-		["WEAPON", "CLOTHING"]
+		["WEAPON", "CLOTHING", "TOOL"]
 	))
 
 	_register_material(MaterialData.new().setup(
 		"mat_iron", "Iron",
 		1.5, 2.0, 1.8, 1.5,
-		["WEAPON", "CLOTHING"]
+		["WEAPON", "CLOTHING", "TOOL"]
 	))
 
 	_register_material(MaterialData.new().setup(
@@ -157,6 +157,29 @@ func _register_all_items() -> void:
 		"A short utility blade.",
 		0.5, 8.0, 0.0, 0.0,
 		ItemData.Slot.OFFHAND, 0.05, 0.0, 0.0, 0.0, 0.0
+	))
+
+
+	# ── Farming tools ────────────────────────────────────────────────────────────
+	# Tools use WEAPON slot (main hand). Material affects durability/efficiency.
+	# Wood tier = basic, Iron tier = proper farm tools.
+	_register(ItemData.new().setup(
+		"item_hoe", "Hoe", ItemData.Category.TOOL,
+		"A sturdy hoe for tilling soil.",
+		1.5, 5.0, 0.0, 0.0,
+		ItemData.Slot.WEAPON, 0.0, 0.05, 0.0, 0.0, 0.0
+	))
+	_register(ItemData.new().setup(
+		"item_scythe", "Scythe", ItemData.Category.TOOL,
+		"A long-handled blade for harvesting crops.",
+		2.0, 8.0, 0.0, 0.0,
+		ItemData.Slot.WEAPON, 0.05, 0.05, 0.0, 0.0, 0.0
+	))
+	_register(ItemData.new().setup(
+		"item_seed_bag", "Seed Bag", ItemData.Category.TOOL,
+		"A sack of mixed crop seeds.",
+		2.5, 4.0, 0.0, 0.0,
+		ItemData.Slot.BACK, 0.0, 0.0, 0.0, 0.0, 0.0
 	))
 
 	print("ItemDatabase: Registered %d items." % _items.size())

@@ -20,7 +20,11 @@ enum Type {
 	TABLE,        # Enables eating meals properly.
 	CHAIR,        # Minor rest restore. Pairs with table.
 	MARKET_STALL, # Enables merchant/guard work.
-	COOKING_POT   # Enables cook work and food production.
+	COOKING_POT,  # Enables cook work and food production.
+	# ── Containers ──────────────────────────────────────────────
+	CHEST,        # General storage. Lockable later.
+	TOOL_RACK,    # Open tool storage. Used at farms and blacksmiths.
+	BARREL        # Food and liquid storage. Used in granaries and taverns.
 }
 
 # ─── QUALITY ──────────────────────────────────────────────────────────────────
@@ -73,7 +77,10 @@ const TYPE_SATISFIES_NEED: Dictionary = {
 	Type.TABLE:        "need_hunger",
 	Type.CHAIR:        "",
 	Type.MARKET_STALL: "",
-	Type.COOKING_POT:  ""
+	Type.COOKING_POT:  "",
+	Type.CHEST:        "",
+	Type.TOOL_RACK:    "",
+	Type.BARREL:       "",
 }
 
 # Base restore amount per use before quality multiplier is applied.
@@ -88,7 +95,10 @@ const TYPE_BASE_RESTORE: Dictionary = {
 	Type.TABLE:        0.1,  # Bonus on top of food's own restore
 	Type.CHAIR:        0.0,
 	Type.MARKET_STALL: 0.0,
-	Type.COOKING_POT:  0.0
+	Type.COOKING_POT:  0.0,
+	Type.CHEST:        0.0,
+	Type.TOOL_RACK:    0.0,
+	Type.BARREL:       0.0,
 }
 
 # ─── IDENTITY ─────────────────────────────────────────────────────────────────
@@ -117,6 +127,13 @@ const TYPE_BASE_RESTORE: Dictionary = {
 
 # IDs of NPCs currently using this object.
 @export var current_users: Array[String] = []
+
+# ─── CONTAINER ──────────────────────────────────────────────────────────────
+# Only populated for CHEST, TOOL_RACK, and BARREL object types.
+# Reuses NPCInventory since the storage logic is identical.
+# Use a very high strength value (99.0) when adding items to bypass weight.
+@export var is_container: bool = false
+@export var inventory: NPCInventory
 
 # ─── QUERIES ──────────────────────────────────────────────────────────────────
 
@@ -162,19 +179,3 @@ func get_quality_name() -> String:
 # Returns object type as a readable string.
 func get_type_name() -> String:
 	return Type.keys()[object_type].capitalize().replace("_", " ")
-	
-	func find_usable_object(
-	type: ObjectData.Type,
-	region_id: String,
-	npc_id: String,
-	permitted_object_ids: Array = []
-) -> ObjectData:
-	var candidates := get_objects_by_type(region_id, type)
-	for obj in candidates:
-		# Check standard access first
-		if obj.is_available_for(npc_id):
-			return obj
-		# Check if NPC has been explicitly granted access
-		if obj.object_id in permitted_object_ids and obj.has_capacity():
-			return obj
-	return null
