@@ -35,12 +35,11 @@ func _ready() -> void:
 # ─── CLOCK HOOKS ──────────────────────────────────────────────────────────────
 
 func _on_minute_passed() -> void:
-	# Update LOD zones for all NPCs every minute
 	_update_all_lod_zones()
 
-	# Process travel for ACTIVE NPCs every minute
 	for npc in NPCManager.get_all_npcs():
-		if npc.location.lod_zone == NPCLocation.LODZone.ACTIVE:
+		if npc.location.lod_zone == NPCLocation.LODZone.ACTIVE or \
+		   npc.location.lod_zone == NPCLocation.LODZone.PRESENT:
 			if npc.location.is_travelling():
 				_advance_travel(npc, 1.0)
 
@@ -116,16 +115,19 @@ func _advance_travel(npc: NPCData, minutes: float) -> void:
 func _arrive(npc: NPCData) -> void:
 	var dest_poi_id := npc.location.destination_poi_id
 
-	# Update region if crossing into a new one
-	npc.location.current_region_id  = npc.location.destination_region_id
-	npc.location.current_poi_id     = dest_poi_id
-	npc.location.destination_poi_id = ""
+	npc.location.current_region_id     = npc.location.destination_region_id
+	npc.location.destination_poi_id    = ""
 	npc.location.destination_region_id = ""
-	npc.location.travel_progress    = 0.0
+	npc.location.travel_progress       = 0.0
 	npc.location.travel_duration_minutes = 0.0
 
-	# Mark NPC as occupying the POI
-	POIManager.enter_poi(dest_poi_id, npc.npc_id)
+	# Check capacity again on arrival — it may have filled up during travel
+	if POIManager.enter_poi(dest_poi_id, npc.npc_id):
+		npc.location.current_poi_id = dest_poi_id
+	else:
+		# POI is full — NPC arrives in the region but not at the POI
+		# Decision loop will find an alternative next tick
+		npc.location.current_poi_id = ""
 
 # ─── TRAVEL SPEED ─────────────────────────────────────────────────────────────
 

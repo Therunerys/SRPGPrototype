@@ -80,6 +80,9 @@ extends Resource
 @export var profession: NPCProfession
 
 # ─── LOCATION ─────────────────────────────────────────────────────────────────
-# Where this NPC currently is in the simulation world.
-# Initialized by NPCGenerator when the NPC is created.
 @export var location: NPCLocation
+
+# The POI this NPC calls home. They will always return here to sleep.
+# Assigned at generation by RegionGenerator. Never changes unless
+# the NPC moves regions (migration system, future feature).
+@export var home_poi_id: String = ""

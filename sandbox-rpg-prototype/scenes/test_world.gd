@@ -11,7 +11,7 @@ func _ready() -> void:
 	if not villages.is_empty():
 		var village: RegionData = villages[0]
 		
-		# Move player to this village so NPCs become ACTIVE
+		# Move player to this village so NPCs become ACTIVE and PRESENT
 		NPCTravelSystem.set_player_position(village.world_position)
 		
 		if not village.resident_ids.is_empty():

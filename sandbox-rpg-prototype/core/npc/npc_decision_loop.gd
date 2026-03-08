@@ -1,25 +1,33 @@
 # npc_decision_loop.gd
 # Autoload — drives autonomous NPC decision making.
 # Every NPC periodically evaluates their situation and decides what to do.
-# Uses a weighted scoring system influenced by needs, traits and profession.
-# INACTIVE NPCs decide hourly, ACTIVE NPCs decide every minute.
-# This is the brain of the simulation — it ties every other system together.
+# Uses a weighted scoring system influenced by needs, traits, profession
+# and time of day. Respects a day/night cycle and meal times.
+# INACTIVE NPCs decide hourly, ACTIVE and PRESENT NPCs decide every minute.
 
 extends Node
 
 # ─── CONFIGURATION ────────────────────────────────────────────────────────────
 
 # Needs below this threshold are considered critical.
-# Critical needs override work and social decisions.
-const CRITICAL_THRESHOLD: float = 0.3
+# Critical needs override all other decisions including work.
+const CRITICAL_THRESHOLD: float = 0.25
 
-# Needs above this threshold are considered satisfied.
-# Satisfied needs are ignored in scoring.
-const SATISFIED_THRESHOLD: float = 0.75
+# Needs above this threshold are considered satisfied and ignored in scoring.
+const SATISFIED_THRESHOLD: float = 0.85
 
 # How much traits amplify need scores.
-# Higher values make traits more influential.
 const TRAIT_INFLUENCE: float = 0.4
+
+# Work hours — NPCs only work between these hours.
+const WORK_HOUR_START: int = 6
+const WORK_HOUR_END: int = 20
+
+# Meal times — hours when NPCs are boosted to eat regardless of hunger level.
+const MEAL_HOURS: Array[int] = [7, 13, 19]
+
+# How close to a meal hour triggers the meal boost (in hours).
+const MEAL_WINDOW: int = 1
 
 # ─── SETUP ────────────────────────────────────────────────────────────────────
 
@@ -41,24 +49,21 @@ func _on_hour_passed() -> void:
 		if npc.location.lod_zone == NPCLocation.LODZone.INACTIVE:
 			if not npc.location.is_travelling():
 				_make_decision(npc)
-			npc.profession.update_satisfaction()
+		npc.profession.update_satisfaction()
 
 # ─── DECISION MAKING ──────────────────────────────────────────────────────────
 
-# Core decision function — evaluates all possible actions and picks the best.
 func _make_decision(npc: NPCData) -> void:
-	# Temporary debug
-	print("  Decision for %s | hunger: %.2f" % [npc.full_name, npc.need_hunger])
-	
+	# Never make decisions while travelling — wait until arrived
+	if npc.location.is_travelling():
+		return
+
+	# Critical hunger — try inventory first
 	if npc.need_hunger <= CRITICAL_THRESHOLD:
-		print("  → hunger critical, trying to eat")
 		if NPCNeedActions.consume_food(npc):
-			print("  → ate from inventory")
 			return
 
 	var scores := _calculate_scores(npc)
-	print("  → scores: %s" % str(scores))
-
 	var best_action := ""
 	var best_score := 0.0
 	for action in scores:
@@ -66,58 +71,78 @@ func _make_decision(npc: NPCData) -> void:
 			best_score = scores[action]
 			best_action = action
 
-	print("  → best action: %s (%.2f)" % [best_action, best_score])
 	if best_action != "":
 		_execute_action(npc, best_action)
 
 # ─── SCORING ──────────────────────────────────────────────────────────────────
 
-# Returns a Dictionary mapping action names to scores.
-# Higher score = higher priority.
 func _calculate_scores(npc: NPCData) -> Dictionary:
 	var scores := {}
+	var hour := WorldClock.hour
+	var is_night: bool = hour >= WORK_HOUR_END or hour < WORK_HOUR_START
+	var is_meal_time: bool = _is_meal_time(hour)
 
 	# ── Hunger ────────────────────────────────────────────────────────────────
-	if npc.need_hunger < SATISFIED_THRESHOLD:
-		var urgency: float = 1.0 - npc.need_hunger
+	# Always score hunger if critical, boost at meal times
+	var hunger_urgency: float = 1.0 - npc.need_hunger
+	if npc.need_hunger <= CRITICAL_THRESHOLD:
+		# Critical hunger always gets maximum score
+		scores["eat"] = 1.0
+	elif is_meal_time and npc.need_hunger < SATISFIED_THRESHOLD:
+		# Meal time boost — NPC wants to eat even if not very hungry
 		var trait_mod: float = 1.0 + (npc.trait_greed * TRAIT_INFLUENCE)
-		scores["eat"] = urgency * trait_mod
+		scores["eat"] = clampf(hunger_urgency * trait_mod + 0.3, 0.0, 1.0)
+	elif npc.need_hunger < SATISFIED_THRESHOLD:
+		# Normal hunger scoring
+		var trait_mod: float = 1.0 + (npc.trait_greed * TRAIT_INFLUENCE)
+		scores["eat"] = hunger_urgency * trait_mod
 
 	# ── Rest ──────────────────────────────────────────────────────────────────
 	if npc.need_rest < SATISFIED_THRESHOLD:
 		var urgency: float = 1.0 - npc.need_rest
-		# Ambitious NPCs deprioritise rest
 		var trait_mod: float = 1.0 - (npc.trait_ambition * TRAIT_INFLUENCE)
-		scores["sleep"] = urgency * trait_mod
+		var rest_score: float = urgency * trait_mod
+		# Boost sleep score at night significantly
+		if is_night:
+			rest_score += 0.5
+		scores["sleep"] = clampf(rest_score, 0.0, 1.0)
 
 	# ── Safety ────────────────────────────────────────────────────────────────
 	if npc.need_safety < SATISFIED_THRESHOLD:
 		var urgency: float = 1.0 - npc.need_safety
-		# Cowardly NPCs (low courage) prioritise safety more
 		var trait_mod: float = 1.0 + (-npc.trait_courage * TRAIT_INFLUENCE)
 		scores["seek_safety"] = urgency * trait_mod
 
 	# ── Social ────────────────────────────────────────────────────────────────
-	if npc.need_social < SATISFIED_THRESHOLD:
+	# Only socialize during the day and evening, not at night
+	if not is_night and npc.need_social < SATISFIED_THRESHOLD:
 		var urgency: float = 1.0 - npc.need_social
 		var trait_mod: float = 1.0 + (npc.trait_empathy * TRAIT_INFLUENCE)
 		scores["socialize"] = urgency * trait_mod
 
 	# ── Work ──────────────────────────────────────────────────────────────────
-	# Work score is based on job satisfaction and ambition
-	# Only score work if needs are not critical
+	# Only work during work hours and if no need is critical
 	var most_urgent_need: float = _get_most_urgent_need(npc)
-	if most_urgent_need < CRITICAL_THRESHOLD:
+	if not is_night and most_urgent_need < CRITICAL_THRESHOLD:
 		var work_score: float = (
-			npc.profession.job_satisfaction * 0.6 +
-			npc.trait_ambition * 0.4 +
-			0.3 # Base work drive — NPCs default to working
+			npc.profession.job_satisfaction * 0.5 +
+			npc.trait_ambition * 0.3
 		)
+		# Only add base work drive if needs are well satisfied
+		if most_urgent_need < 0.2:
+			work_score += 0.3
 		scores["work"] = clampf(work_score, 0.0, 1.0)
 
 	return scores
 
-# Returns the urgency value of the most critical need.
+# Returns true if the current hour is within a meal window.
+func _is_meal_time(hour: int) -> bool:
+	for meal_hour in MEAL_HOURS:
+		if abs(hour - meal_hour) <= MEAL_WINDOW:
+			return true
+	return false
+
+# Returns the urgency of the most critical need.
 func _get_most_urgent_need(npc: NPCData) -> float:
 	return max(
 		1.0 - npc.need_hunger,
@@ -134,34 +159,36 @@ func _get_most_urgent_need(npc: NPCData) -> float:
 
 func _execute_action(npc: NPCData, action: String) -> void:
 	match action:
-		"eat":        _action_eat(npc)
-		"sleep":      _action_sleep(npc)
+		"eat":         _action_eat(npc)
+		"sleep":       _action_sleep(npc)
 		"seek_safety": _action_seek_safety(npc)
-		"socialize":  _action_socialize(npc)
-		"work":       _action_work(npc)
+		"socialize":   _action_socialize(npc)
+		"work":        _action_work(npc)
 
 # ─── ACTIONS ──────────────────────────────────────────────────────────────────
 
 func _action_eat(npc: NPCData) -> void:
-	# Already at a food POI — try to take food from it
+	# At a food POI — take food from it
 	if _is_at_poi_type(npc, POIData.Type.TAVERN) or \
 	   _is_at_poi_type(npc, POIData.Type.GRANARY):
-		var poi := POIManager.get_poi(npc.location.current_poi_id)
-		if poi and _take_food_from_poi(npc, poi):
+		var current_poi := POIManager.get_poi(npc.location.current_poi_id)
+		if current_poi and _take_food_from_poi(npc, current_poi):
+			# Need satisfied — leave so others can use it
+			POIManager.exit_poi(current_poi.poi_id, npc.npc_id)
+			npc.location.current_poi_id = ""
 			return
 
-	# Try eating from inventory first
+	# Try inventory before travelling
 	if NPCNeedActions.consume_food(npc):
 		return
 
-	# Nothing in inventory — travel to nearest food source
+	# Travel to nearest food POI
 	var poi := _find_nearest_poi_for_need(npc, "need_hunger")
 	if poi:
 		NPCTravelSystem.begin_travel(npc, poi.poi_id)
 
-# Takes one food item from a POI into NPC inventory and consumes it.
+# Takes the best food item from a POI and consumes it.
 func _take_food_from_poi(npc: NPCData, poi: POIData) -> bool:
-	# Find best food in POI storage
 	var best_id := ""
 	var best_restore := 0.0
 
@@ -177,44 +204,44 @@ func _take_food_from_poi(npc: NPCData, poi: POIData) -> bool:
 	if best_id == "":
 		return false
 
-	# Transfer one unit from POI to NPC inventory
 	poi.stored_items[best_id] -= 1
 	if poi.stored_items[best_id] <= 0:
 		poi.stored_items.erase(best_id)
 
-	# Add to inventory and consume immediately
 	npc.inventory.add_item(best_id, 1, npc.stat_strength)
 	NPCNeedActions.consume_food(npc)
 	return true
 
 func _action_sleep(npc: NPCData) -> void:
-	# Check if already at a home
-	if _is_at_poi_type(npc, POIData.Type.HOME):
+	# Only sleep at own home
+	if npc.location.current_poi_id == npc.home_poi_id:
 		NPCNeedActions.sleep(npc)
 		return
 
-	# Travel to nearest home
-	var poi := _find_nearest_poi_for_need(npc, "need_rest")
-	if poi:
-		NPCTravelSystem.begin_travel(npc, poi.poi_id)
+	# Travel home to sleep
+	if npc.home_poi_id != "":
+		NPCTravelSystem.begin_travel(npc, npc.home_poi_id)
 
 func _action_seek_safety(npc: NPCData) -> void:
-	# Home is the safest place
-	if _is_at_poi_type(npc, POIData.Type.HOME):
+	# Only feel safe at own home
+	if npc.location.current_poi_id == npc.home_poi_id:
 		NPCNeedActions.feel_safe(npc, 0.15)
 		return
 
-	var poi := _find_nearest_poi_for_need(npc, "need_safety")
-	if poi:
-		NPCTravelSystem.begin_travel(npc, poi.poi_id)
+	if npc.home_poi_id != "":
+		NPCTravelSystem.begin_travel(npc, npc.home_poi_id)
 
 func _action_socialize(npc: NPCData) -> void:
-	# Tavern is the best place to socialize
+	# Only socialize at tavern
 	if _is_at_poi_type(npc, POIData.Type.TAVERN):
-		# Find another NPC at the same tavern to socialize with
 		var partner := _find_social_partner(npc)
 		if partner:
 			NPCNeedActions.socialize(npc, partner)
+			# Leave after socializing
+			var current_poi := POIManager.get_poi(npc.location.current_poi_id)
+			if current_poi:
+				POIManager.exit_poi(current_poi.poi_id, npc.npc_id)
+				npc.location.current_poi_id = ""
 			return
 
 	var poi := _find_nearest_poi_for_need(npc, "need_social")
@@ -222,41 +249,38 @@ func _action_socialize(npc: NPCData) -> void:
 		NPCTravelSystem.begin_travel(npc, poi.poi_id)
 
 func _action_work(npc: NPCData) -> void:
-	# Find the correct work POI for this NPC's current job
 	var work_poi_type := _get_work_poi_type(npc)
 	if work_poi_type == -1:
 		return
 
+	# Already at correct work POI — do work
 	if _is_at_poi_type(npc, work_poi_type as POIData.Type):
-		# Already at work — perform work action
 		npc.profession.do_work(npc)
 		npc.profession.is_employed = true
 		return
 
-	# Travel to work
+	# Find work POI with capacity and travel to it
 	var pois := POIManager.get_pois_by_type(
 		npc.location.current_region_id,
 		work_poi_type as POIData.Type
 	)
-	if not pois.is_empty():
-		NPCTravelSystem.begin_travel(npc, pois[0].poi_id)
+	for poi in pois:
+		if poi.has_capacity():
+			NPCTravelSystem.begin_travel(npc, poi.poi_id)
+			return
 
 # ─── HELPERS ──────────────────────────────────────────────────────────────────
 
-# Finds the nearest POI that satisfies a given need.
-# Searches current region first, then neighbouring regions.
 func _find_nearest_poi_for_need(npc: NPCData, need_name: String) -> POIData:
 	# Search current region first
 	var local_pois := POIManager.get_pois_for_need(
 		npc.location.current_region_id, need_name
 	)
-	if not local_pois.is_empty():
-		# Pick POI with available capacity
-		for poi in local_pois:
-			if poi.has_capacity():
-				return poi
+	for poi in local_pois:
+		if poi.has_capacity():
+			return poi
 
-	# Search all regions if nothing local found
+	# Search wider world if nothing local
 	var region := RegionManager.get_region(npc.location.current_region_id)
 	if region == null:
 		return null
@@ -266,12 +290,10 @@ func _find_nearest_poi_for_need(npc: NPCData, need_name: String) -> POIData:
 		region.world_position
 	)
 
-# Returns true if the NPC is currently at a POI of a given type.
 func _is_at_poi_type(npc: NPCData, poi_type: POIData.Type) -> bool:
 	var poi := POIManager.get_poi(npc.location.current_poi_id)
 	return poi != null and poi.poi_type == poi_type
 
-# Returns a social partner NPC at the same POI, or null if none found.
 func _find_social_partner(npc: NPCData) -> NPCData:
 	var poi := POIManager.get_poi(npc.location.current_poi_id)
 	if poi == null:
@@ -281,7 +303,6 @@ func _find_social_partner(npc: NPCData) -> NPCData:
 			return NPCManager.get_npc(other_id)
 	return null
 
-# Maps a need name to the POI type that satisfies it.
 func _need_to_poi_type(need_name: String) -> POIData.Type:
 	match need_name:
 		"need_hunger":  return POIData.Type.TAVERN
@@ -290,7 +311,6 @@ func _need_to_poi_type(need_name: String) -> POIData.Type:
 		"need_social":  return POIData.Type.TAVERN
 		_:              return POIData.Type.HOME
 
-# Returns the POI type where this NPC should work, or -1 if none.
 func _get_work_poi_type(npc: NPCData) -> int:
 	match npc.profession.current_job:
 		NPCProfession.Type.FARMER:     return POIData.Type.FARM

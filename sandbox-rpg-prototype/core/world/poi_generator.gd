@@ -23,25 +23,24 @@ static func generate_for_region(region: RegionData) -> void:
 # ─── INTERNAL ─────────────────────────────────────────────────────────────────
 
 static func _generate_village_pois(region: RegionData) -> void:
-	_create_poi(region, POIData.Type.FARM,       "Farm",       4)
-	
-	# Granary starts with food stock
-	var granary := _create_poi(region, POIData.Type.GRANARY, "Granary", 10)
+	_create_poi(region, POIData.Type.FARM,       "Farm",       10)
+
+	var granary := _create_poi(region, POIData.Type.GRANARY, "Granary", 20)
 	granary.stored_items["item_bread"] = 50
 	granary.stored_items["item_dried_meat"] = 20
 
-	# Tavern starts with food and ale
-	var tavern := _create_poi(region, POIData.Type.TAVERN, "Tavern", 8)
+	var tavern := _create_poi(region, POIData.Type.TAVERN, "Tavern", 20)
 	tavern.stored_items["item_bread"] = 20
 	tavern.stored_items["item_ale"] = 30
 
-	_create_poi(region, POIData.Type.MARKET,     "Market",     6)
-	_create_poi(region, POIData.Type.BLACKSMITH, "Blacksmith", 2)
+	_create_poi(region, POIData.Type.MARKET,     "Market",     15)
+	_create_poi(region, POIData.Type.BLACKSMITH, "Blacksmith", 5)
 
 	var resident_count := region.resident_ids.size()
-	var home_count: int = max(3, int(resident_count / 2.0))
+	var home_count: int = max(3, int(resident_count / 3.0))
+	var home_capacity: int = max(2, int(float(resident_count) / float(home_count)) + 1)
 	for i in home_count:
-		_create_poi(region, POIData.Type.HOME, "Home %d" % (i + 1), 5)
+		_create_poi(region, POIData.Type.HOME, "Home %d" % (i + 1), home_capacity)
 
 static func _generate_wilderness_pois(region: RegionData) -> void:
 	# Wilderness only has a camp for basic rest and safety
