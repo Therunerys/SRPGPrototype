@@ -16,6 +16,10 @@ const WORLD_SIZE: Vector2 = Vector2(1000.0, 1000.0)
 # Prevents regions from overlapping.
 const MIN_REGION_SPACING: float = 80.0
 
+# Minimum distance between two villages.
+# Ensures villages are always separated by wilderness territory.
+const MIN_VILLAGE_SPACING: float = 300.0
+
 # Population caps per region type
 const POP_CAP_VILLAGE: int = 50
 const POP_CAP_WILDERNESS: int = 5  # scouts, hermits, bandits etc
@@ -75,7 +79,7 @@ static func generate_world(village_count: int, wilderness_count: int) -> void:
 # Creates a single RegionData of the given type.
 # Returns null if a valid position could not be found.
 static func _create_region(type: RegionData.Type, placed: Array[Vector2]) -> RegionData:
-	var pos := _find_valid_position(placed)
+	var pos := _find_valid_position(type, placed)
 	if pos == Vector2.ZERO:
 		push_warning("RegionGenerator: Could not find valid position for region.")
 		return null
@@ -149,17 +153,33 @@ static func _place_npcs_in_region(region: RegionData) -> void:
 
 # Divides the world into a grid and picks a random point within a cell.
 # Guarantees even spread across the map rather than random clustering.
-static func _find_valid_position(placed: Array[Vector2]) -> Vector2:
+static func _find_valid_position(type: RegionData.Type, placed: Array[Vector2]) -> Vector2:
+	# Collect existing village positions for the extra spacing check
+	var village_positions: Array[Vector2] = []
+	for region in RegionManager.get_all_regions():
+		if region.region_type == RegionData.Type.VILLAGE:
+			village_positions.append(region.world_position)
+
 	for attempt in 30:
 		var candidate := Vector2(
 			randf_range(50.0, WORLD_SIZE.x - 50.0),
 			randf_range(50.0, WORLD_SIZE.y - 50.0)
 		)
+
+		# Check minimum spacing against all placed regions
 		var valid := true
 		for existing in placed:
 			if candidate.distance_to(existing) < MIN_REGION_SPACING:
 				valid = false
 				break
+
+		# Villages must also stay far from other villages
+		if valid and type == RegionData.Type.VILLAGE:
+			for village_pos in village_positions:
+				if candidate.distance_to(village_pos) < MIN_VILLAGE_SPACING:
+					valid = false
+					break
+
 		if valid:
 			return candidate
 
@@ -170,15 +190,11 @@ static func _generate_village_name() -> String:
 	var suffix := VILLAGE_SUFFIXES[randi() % VILLAGE_SUFFIXES.size()]
 	return prefix + suffix
 
-static func _generate_id() -> String:
-	return "region_%d_%s" % [Time.get_ticks_msec(), _random_suffix(3)]
+static var _id_counter: int = 0
 
-static func _random_suffix(length: int) -> String:
-	const CHARS = "abcdefghijklmnopqrstuvwxyz"
-	var result := ""
-	for i in length:
-		result += CHARS[randi() % CHARS.length()]
-	return result
+static func _generate_id() -> String:
+	_id_counter += 1
+	return "region_%d" % _id_counter
 	
 # Tracks used wilderness names to avoid duplicates within a generation pass
 static var _used_wilderness_names: Array[String] = []

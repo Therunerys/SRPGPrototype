@@ -11,18 +11,20 @@ class_name NPCNeedActions
 # Attempts to consume the most restorative food item in the NPC's inventory.
 # Returns true if food was consumed, false if inventory has no food.
 static func consume_food(npc: NPCData) -> bool:
-	var best_item_id := _find_best_food(npc)
-	if best_item_id == "":
+	var best_resolved_id := _find_best_food(npc)
+	if best_resolved_id == "":
 		return false
 
-	var resolved := ItemResolver.resolve(best_item_id)
+	# Split resolved_id back into item_id and material_id before resolving
+	var parts := best_resolved_id.split("__")
+	var item_id := parts[0]
+	var material_id := parts[1] if parts.size() > 1 else ""
+
+	var resolved := ItemResolver.resolve(item_id, material_id)
 	if resolved == null:
 		return false
 
-	# Remove food from inventory
-	npc.inventory.remove_item(best_item_id, 1)
-
-	# Restore hunger — clamped so it never exceeds 1.0
+	npc.inventory.remove_item(best_resolved_id, 1)
 	npc.need_hunger = clampf(npc.need_hunger + resolved.hunger_restore, 0.0, 1.0)
 
 	return true

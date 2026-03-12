@@ -38,17 +38,16 @@ func _ready() -> void:
 # ─── CLOCK HOOKS ──────────────────────────────────────────────────────────────
 
 func _on_minute_passed() -> void:
-	for npc in NPCManager.get_all_npcs():
-		if npc.location.lod_zone == NPCLocation.LODZone.ACTIVE or \
-		   npc.location.lod_zone == NPCLocation.LODZone.PRESENT:
-			if not npc.location.is_travelling():
-				_make_decision(npc)
+	for npc in NPCManager.get_simulated_npcs():
+		if not npc.location.is_travelling():
+			_make_decision(npc)
 
 func _on_hour_passed() -> void:
+	for npc in NPCManager.get_inactive_npcs():
+		if not npc.location.is_travelling():
+			_make_decision(npc)
+	# Satisfaction update still runs for all NPCs regardless of LOD
 	for npc in NPCManager.get_all_npcs():
-		if npc.location.lod_zone == NPCLocation.LODZone.INACTIVE:
-			if not npc.location.is_travelling():
-				_make_decision(npc)
 		npc.profession.update_satisfaction()
 
 # ─── DECISION MAKING ──────────────────────────────────────────────────────────

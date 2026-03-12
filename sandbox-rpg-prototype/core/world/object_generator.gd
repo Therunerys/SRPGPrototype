@@ -154,12 +154,8 @@ static func _create_object(
 	ObjectManager.register_object(obj)
 	return obj
 
-static func _generate_id() -> String:
-	return "obj_%d_%s" % [Time.get_ticks_msec(), _random_suffix(3)]
+static var _id_counter: int = 0
 
-static func _random_suffix(length: int) -> String:
-	const CHARS = "abcdefghijklmnopqrstuvwxyz"
-	var result := ""
-	for i in length:
-		result += CHARS[randi() % CHARS.length()]
-	return result
+static func _generate_id() -> String:
+	_id_counter += 1
+	return "obj_%d" % _id_counter

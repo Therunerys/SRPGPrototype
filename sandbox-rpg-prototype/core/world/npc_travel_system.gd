@@ -35,20 +35,17 @@ func _ready() -> void:
 # ─── CLOCK HOOKS ──────────────────────────────────────────────────────────────
 
 func _on_minute_passed() -> void:
+	# Update zones first so buckets are correct before processing
 	_update_all_lod_zones()
 
-	for npc in NPCManager.get_all_npcs():
-		if npc.location.lod_zone == NPCLocation.LODZone.ACTIVE or \
-		   npc.location.lod_zone == NPCLocation.LODZone.PRESENT:
-			if npc.location.is_travelling():
-				_advance_travel(npc, 1.0)
+	for npc in NPCManager.get_simulated_npcs():
+		if npc.location.is_travelling():
+			_advance_travel(npc, 1.0)
 
 func _on_hour_passed() -> void:
-	# Process travel for INACTIVE NPCs every hour
-	for npc in NPCManager.get_all_npcs():
-		if npc.location.lod_zone == NPCLocation.LODZone.INACTIVE:
-			if npc.location.is_travelling():
-				_advance_travel(npc, 60.0)
+	for npc in NPCManager.get_inactive_npcs():
+		if npc.location.is_travelling():
+			_advance_travel(npc, 60.0)
 
 # ─── LOD ──────────────────────────────────────────────────────────────────────
 
@@ -58,18 +55,20 @@ func _update_all_lod_zones() -> void:
 
 func _update_lod_zone(npc: NPCData) -> void:
 	var region := RegionManager.get_region(npc.location.current_region_id)
+
+	# No region means we can't calculate distance — default to inactive
 	if region == null:
-		npc.location.lod_zone = NPCLocation.LODZone.INACTIVE
+		NPCManager.set_lod_zone(npc.npc_id, NPCLocation.LODZone.INACTIVE)
 		return
 
 	var dist: float = player_position.distance_to(region.world_position)
 
 	if dist <= LOD_DISTANCE_PRESENT:
-		npc.location.lod_zone = NPCLocation.LODZone.PRESENT
+		NPCManager.set_lod_zone(npc.npc_id, NPCLocation.LODZone.PRESENT)
 	elif dist <= LOD_DISTANCE_ACTIVE:
-		npc.location.lod_zone = NPCLocation.LODZone.ACTIVE
+		NPCManager.set_lod_zone(npc.npc_id, NPCLocation.LODZone.ACTIVE)
 	else:
-		npc.location.lod_zone = NPCLocation.LODZone.INACTIVE
+		NPCManager.set_lod_zone(npc.npc_id, NPCLocation.LODZone.INACTIVE)
 
 # ─── TRAVEL ───────────────────────────────────────────────────────────────────
 

@@ -91,10 +91,11 @@ static func _create_npc_data() -> NPCData:
 	
 	return npc
 
-# Generates a unique ID using a timestamp and random suffix.
-# Example output: "npc_17291038472_k7x"
+static var _id_counter: int = 0
+
 static func _generate_id() -> String:
-	return "npc_%d_%s" % [Time.get_ticks_msec(), _random_suffix(3)]
+	_id_counter += 1
+	return "npc_%d" % _id_counter
 
 # Returns a random float between -TRAIT_SPREAD and +TRAIT_SPREAD.
 static func _random_trait() -> float:
